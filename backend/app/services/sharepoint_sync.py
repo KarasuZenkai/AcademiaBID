@@ -143,6 +143,20 @@ def _lesson(session: Session, module: Module, site_id: str, drive_id: str, resou
     return True
 
 
+def _academy_folders(graph: GraphService, drive: dict, token: str, session: Session) -> List[dict]:
+    """Flatten the optional `Academia BID` SharePoint container folder."""
+    folders = [item for item in drive["items"] if item["is_folder"]]
+    container = next((item for item in folders if normalize(item["name"]) == "academiabid"), None)
+    if container is None:
+        return folders
+    # Older versions treated this technical container as an academy. Keep its
+    # data for auditability but remove it from the learner catalog.
+    obsolete = _by_folder_identity(session, Academy, drive["id"], container["id"])
+    if obsolete is not None and (obsolete.description or "").startswith("Contenido sincronizado desde SharePoint"):
+        obsolete.is_published = False
+    return [item for item in _children(graph, drive["id"], container["id"], token) if item["is_folder"]]
+
+
 def sync_user_catalog(session: Session, user: AuthenticatedUser) -> dict:
     """Mirror Academy > Path > Course > Module > files from SharePoint folders.
 
@@ -152,7 +166,7 @@ def sync_user_catalog(session: Session, user: AuthenticatedUser) -> dict:
     graph = GraphService(); site = graph.inspect_site(user.access_token or "")
     counts = {"academies": 0, "paths": 0, "courses": 0, "modules": 0, "videos": 0, "documents": 0, "ignored_files": 0}
     for drive in site["drives"]:
-        for academy_folder in (item for item in drive["items"] if item["is_folder"]):
+        for academy_folder in _academy_folders(graph, drive, user.access_token or "", session):
             path_folders = [item for item in _children(graph, drive["id"], academy_folder["id"], user.access_token or "") if item["is_folder"]]
             if not path_folders:
                 continue

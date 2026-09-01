@@ -24,6 +24,16 @@ class FakeGraph:
         return children[item_id]
 
 
+class WrappedGraph(FakeGraph):
+    def inspect_site(self, _token):
+        return {"site": {"id": "site-1"}, "drives": [{"id": "drive-1", "items": [{"id": "wrapper-1", "name": "Academia BID", "is_folder": True}]}]}
+
+    def list_children(self, drive_id, item_id, token):
+        if item_id == "wrapper-1":
+            return [{"id": "academy-1", "name": "01_Nuevo_ingreso", "is_folder": True}]
+        return super().list_children(drive_id, item_id, token)
+
+
 def test_sync_creates_sharepoint_hierarchy_and_locks_new_academy(db_session, sample_lesson, monkeypatch):
     monkeypatch.setattr("app.services.sharepoint_sync.GraphService", FakeGraph)
 
@@ -49,3 +59,10 @@ def test_sync_creates_sharepoint_hierarchy_and_locks_new_academy(db_session, sam
     db_session.add(LearningPathAssignment(user_id=learner.id, learning_path_id=path.id)); db_session.commit()
     learner_auth = AuthenticatedUser(id=learner.id, external_id=learner.external_id, name=learner.name, email=learner.email, role=Role.LEARNER, groups=())
     assert path_allowed(db_session, path, learner_auth)
+
+
+def test_sync_ignores_the_academia_bid_container_folder(db_session, sample_lesson, monkeypatch):
+    monkeypatch.setattr("app.services.sharepoint_sync.GraphService", WrappedGraph)
+    sync_user_catalog(db_session, sample_lesson.user)
+    assert db_session.query(Academy).filter_by(name="Nuevo ingreso").count() == 1
+    assert db_session.query(Academy).filter_by(name="Academia BID").count() == 0
