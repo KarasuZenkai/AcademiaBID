@@ -12,7 +12,7 @@ from app.models.enums import Role
 
 if TYPE_CHECKING:
     from app.models.catalog import Academy, Course
-    from app.models.progress import AuditLog, CourseCompletion, Enrollment, LearningPathCompletion, LessonProgress, QuizAttempt, VideoRange, VideoSession
+    from app.models.progress import AcademyAssignment, AuditLog, CourseCompletion, Enrollment, LearningPathAssignment, LearningPathCompletion, LessonProgress, ModuleAssignment, QuizAttempt, VideoRange, VideoSession
 
 user_groups = Table(
     "user_groups", Base.metadata,
@@ -37,6 +37,9 @@ class User(UUIDTimestampMixin, Base):
     learning_path_completions: Mapped[list[LearningPathCompletion]] = relationship(back_populates="user", cascade="all, delete-orphan")
     quiz_attempts: Mapped[list[QuizAttempt]] = relationship(back_populates="user", cascade="all, delete-orphan")
     audit_logs: Mapped[list[AuditLog]] = relationship(back_populates="actor")
+    academy_assignments: Mapped[list[AcademyAssignment]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    learning_path_assignments: Mapped[list[LearningPathAssignment]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    module_assignments: Mapped[list[ModuleAssignment]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Group(UUIDTimestampMixin, Base):

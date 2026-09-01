@@ -2,6 +2,6 @@
 
 from app.models.catalog import Academy, Course, LearningPath, LearningPathCourse, Lesson, Module
 from app.models.identity import Group, User
-from app.models.progress import AuditLog, CourseCompletion, Enrollment, LearningPathCompletion, LessonProgress, QuizAttempt, VideoRange, VideoSession
+from app.models.progress import AcademyAssignment, AuditLog, CourseCompletion, CoursePrerequisite, Enrollment, LearningPathAssignment, LearningPathCompletion, LessonProgress, ModuleAssignment, QuizAttempt, VideoRange, VideoSession
 
-__all__ = ["Academy", "AuditLog", "Course", "CourseCompletion", "Enrollment", "Group", "LearningPath", "LearningPathCompletion", "LearningPathCourse", "Lesson", "LessonProgress", "Module", "QuizAttempt", "User", "VideoRange", "VideoSession"]
+__all__ = ["Academy", "AcademyAssignment", "AuditLog", "Course", "CourseCompletion", "CoursePrerequisite", "Enrollment", "Group", "LearningPath", "LearningPathAssignment", "LearningPathCompletion", "LearningPathCourse", "Lesson", "LessonProgress", "Module", "ModuleAssignment", "QuizAttempt", "User", "VideoRange", "VideoSession"]

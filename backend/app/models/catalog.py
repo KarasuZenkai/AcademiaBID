@@ -12,7 +12,7 @@ from app.models.enums import LessonType
 
 if TYPE_CHECKING:
     from app.models.identity import Group
-    from app.models.progress import CourseCompletion, Enrollment, LearningPathCompletion, LessonProgress, QuizAttempt, VideoRange, VideoSession
+    from app.models.progress import AcademyAssignment, CourseCompletion, CoursePrerequisite, Enrollment, LearningPathAssignment, LearningPathCompletion, LessonProgress, ModuleAssignment, QuizAttempt, VideoRange, VideoSession
 
 academy_groups = Table("academy_groups", Base.metadata,
     Column("academy_id", ForeignKey("academies.id", ondelete="CASCADE"), primary_key=True),
@@ -31,6 +31,7 @@ class Academy(UUIDTimestampMixin, Base):
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     groups: Mapped[list[Group]] = relationship(secondary=academy_groups, back_populates="academies")
     learning_paths: Mapped[list[LearningPath]] = relationship(back_populates="academy", cascade="all, delete-orphan")
+    assignments: Mapped[list[AcademyAssignment]] = relationship(back_populates="academy", cascade="all, delete-orphan")
 
 
 class LearningPath(UUIDTimestampMixin, Base):
@@ -45,6 +46,7 @@ class LearningPath(UUIDTimestampMixin, Base):
     academy: Mapped[Academy] = relationship(back_populates="learning_paths")
     course_links: Mapped[list[LearningPathCourse]] = relationship(back_populates="learning_path", cascade="all, delete-orphan")
     completions: Mapped[list[LearningPathCompletion]] = relationship(back_populates="learning_path", cascade="all, delete-orphan")
+    assignments: Mapped[list[LearningPathAssignment]] = relationship(back_populates="learning_path", cascade="all, delete-orphan")
 
 
 class Course(UUIDTimestampMixin, Base):
@@ -60,6 +62,12 @@ class Course(UUIDTimestampMixin, Base):
     modules: Mapped[list[Module]] = relationship(back_populates="course", cascade="all, delete-orphan")
     enrollments: Mapped[list[Enrollment]] = relationship(back_populates="course", cascade="all, delete-orphan")
     completions: Mapped[list[CourseCompletion]] = relationship(back_populates="course", cascade="all, delete-orphan")
+    prerequisites: Mapped[list[CoursePrerequisite]] = relationship(
+        foreign_keys="CoursePrerequisite.course_id", back_populates="course", cascade="all, delete-orphan"
+    )
+    required_for: Mapped[list[CoursePrerequisite]] = relationship(
+        foreign_keys="CoursePrerequisite.prerequisite_course_id", back_populates="prerequisite_course", cascade="all, delete-orphan"
+    )
 
 
 class LearningPathCourse(Base):
@@ -82,6 +90,7 @@ class Module(UUIDTimestampMixin, Base):
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     course: Mapped[Course] = relationship(back_populates="modules")
     lessons: Mapped[list[Lesson]] = relationship(back_populates="module", cascade="all, delete-orphan")
+    assignments: Mapped[list[ModuleAssignment]] = relationship(back_populates="module", cascade="all, delete-orphan")
 
 
 class Lesson(UUIDTimestampMixin, Base):

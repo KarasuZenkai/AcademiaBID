@@ -1,14 +1,16 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from app.api.dependencies import get_current_user
 from app.core.permissions import require_roles
 from app.db.session import get_db_session
 from app.models.catalog import Academy, Course, LearningPath, LearningPathCourse, Lesson, Module
+from app.models.identity import User
+from app.models.progress import AcademyAssignment, CoursePrerequisite, Enrollment, LearningPathAssignment, ModuleAssignment
 from app.models.enums import Role
 from app.providers.auth.base import AuthenticatedUser
-from app.schemas.admin import AcademyWrite, CourseWrite, LessonWrite, ModuleWrite, PathCourseWrite, PathWrite
+from app.schemas.admin import AcademyWrite, AssignmentTarget, AssignmentWrite, CourseWrite, LessonWrite, ModuleWrite, PathCourseWrite, PathWrite, PrerequisiteWrite
 from app.services.audit import log_admin_action
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -24,7 +26,111 @@ def save(session, item, actor, action, kind):
 
 @router.get("/overview")
 def overview(session: Session = Depends(get_db_session), _: AuthenticatedUser = admin_only):
-    return {"academies": [{"id": str(a.id), "name": a.name, "slug": a.slug, "published": a.is_published} for a in session.scalars(select(Academy).order_by(Academy.name))], "paths": [{"id": str(p.id), "name": p.name, "academy_id": str(p.academy_id)} for p in session.scalars(select(LearningPath).order_by(LearningPath.name))], "courses": [{"id": str(c.id), "title": c.title, "slug": c.slug, "published": c.is_published} for c in session.scalars(select(Course).order_by(Course.title))], "modules": [{"id": str(m.id), "title": m.title, "course_id": str(m.course_id)} for m in session.scalars(select(Module).order_by(Module.title))]}
+    return {
+        "users": [{"id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value, "active": user.is_active} for user in session.scalars(select(User).order_by(User.name))],
+        "academies": [{"id": str(a.id), "name": a.name, "slug": a.slug, "published": a.is_published} for a in session.scalars(select(Academy).order_by(Academy.name))],
+        "paths": [{"id": str(p.id), "name": p.name, "academy_id": str(p.academy_id)} for p in session.scalars(select(LearningPath).order_by(LearningPath.name))],
+        "courses": [{"id": str(c.id), "title": c.title, "slug": c.slug, "published": c.is_published} for c in session.scalars(select(Course).order_by(Course.title))],
+        "modules": [{"id": str(m.id), "title": m.title, "course_id": str(m.course_id)} for m in session.scalars(select(Module).order_by(Module.title))],
+    }
+
+
+ASSIGNMENT_MODELS = {
+    AssignmentTarget.ACADEMY: (AcademyAssignment, "academy_id", Academy, "academia"),
+    AssignmentTarget.LEARNING_PATH: (LearningPathAssignment, "learning_path_id", LearningPath, "ruta"),
+    AssignmentTarget.COURSE: (Enrollment, "course_id", Course, "curso"),
+    AssignmentTarget.MODULE: (ModuleAssignment, "module_id", Module, "módulo"),
+}
+
+
+def assignment_records(session: Session) -> list[dict]:
+    records = []
+    for target_type, (model, field, target_model, label) in ASSIGNMENT_MODELS.items():
+        for assignment, user, target in session.execute(select(model, User, target_model).join(User, model.user_id == User.id).join(target_model, getattr(model, field) == target_model.id)).all():
+            target_name = getattr(target, "name", None) or getattr(target, "title", None)
+            records.append({"user_id": str(user.id), "user_name": user.name, "target_type": target_type.value, "target_id": str(target.id), "target_name": target_name, "target_label": label, "assigned_at": assignment.created_at.isoformat()})
+    return sorted(records, key=lambda item: (item["user_name"].lower(), item["target_type"], item["target_name"].lower()))
+
+
+@router.get("/assignments")
+def list_assignments(session: Session = Depends(get_db_session), _: AuthenticatedUser = admin_only):
+    return assignment_records(session)
+
+
+@router.post("/assignments", status_code=201)
+def create_assignment(payload: AssignmentWrite, session: Session = Depends(get_db_session), actor: AuthenticatedUser = admin_only):
+    entity(session, User, payload.user_id)
+    model, field, target_model, label = ASSIGNMENT_MODELS[payload.target_type]
+    entity(session, target_model, payload.target_id)
+    existing = session.scalar(select(model).where(model.user_id == payload.user_id, getattr(model, field) == payload.target_id))
+    if existing:
+        raise HTTPException(status_code=409, detail="This assignment already exists")
+    assignment = model(user_id=payload.user_id, **{field: payload.target_id})
+    session.add(assignment); session.flush()
+    log_admin_action(session, actor.id, "ASSIGN_LEARNING_CONTENT", label, payload.target_id, {"user_id": str(payload.user_id), "target_type": payload.target_type.value})
+    session.commit()
+    return {"user_id": str(payload.user_id), "target_type": payload.target_type.value, "target_id": str(payload.target_id)}
+
+
+@router.delete("/assignments/{target_type}/{user_id}/{target_id}", status_code=204)
+def delete_assignment(target_type: AssignmentTarget, user_id: uuid.UUID, target_id: uuid.UUID, session: Session = Depends(get_db_session), actor: AuthenticatedUser = admin_only):
+    model, field, _, label = ASSIGNMENT_MODELS[target_type]
+    assignment = session.scalar(select(model).where(model.user_id == user_id, getattr(model, field) == target_id))
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    session.delete(assignment); session.flush()
+    log_admin_action(session, actor.id, "REMOVE_LEARNING_ASSIGNMENT", label, target_id, {"user_id": str(user_id), "target_type": target_type.value})
+    session.commit()
+    return None
+
+
+@router.get("/prerequisites")
+def list_prerequisites(session: Session = Depends(get_db_session), _: AuthenticatedUser = admin_only):
+    prerequisite = aliased(Course)
+    rows = session.execute(
+        select(CoursePrerequisite, Course, prerequisite)
+        .join(Course, CoursePrerequisite.course_id == Course.id)
+        .join(prerequisite, CoursePrerequisite.prerequisite_course_id == prerequisite.id)
+    ).all()
+    return [{"course_id": str(course.id), "course_title": course.title, "prerequisite_course_id": str(required.id), "prerequisite_course_title": required.title} for _, course, required in rows]
+
+
+def would_create_prerequisite_cycle(session: Session, course_id: uuid.UUID, prerequisite_id: uuid.UUID) -> bool:
+    pending = [prerequisite_id]
+    visited = set()
+    while pending:
+        current = pending.pop()
+        if current == course_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        pending.extend(session.scalars(select(CoursePrerequisite.prerequisite_course_id).where(CoursePrerequisite.course_id == current)).all())
+    return False
+
+
+@router.post("/prerequisites", status_code=201)
+def create_prerequisite(payload: PrerequisiteWrite, session: Session = Depends(get_db_session), actor: AuthenticatedUser = admin_only):
+    entity(session, Course, payload.course_id); entity(session, Course, payload.prerequisite_course_id)
+    if payload.course_id == payload.prerequisite_course_id or would_create_prerequisite_cycle(session, payload.course_id, payload.prerequisite_course_id):
+        raise HTTPException(status_code=422, detail="A prerequisite cannot create a circular course dependency")
+    if session.get(CoursePrerequisite, {"course_id": payload.course_id, "prerequisite_course_id": payload.prerequisite_course_id}):
+        raise HTTPException(status_code=409, detail="This prerequisite already exists")
+    session.add(CoursePrerequisite(**payload.model_dump())); session.flush()
+    log_admin_action(session, actor.id, "ADD_COURSE_PREREQUISITE", "course", payload.course_id, {"prerequisite_course_id": str(payload.prerequisite_course_id)})
+    session.commit()
+    return {"course_id": str(payload.course_id), "prerequisite_course_id": str(payload.prerequisite_course_id)}
+
+
+@router.delete("/prerequisites/{course_id}/{prerequisite_course_id}", status_code=204)
+def delete_prerequisite(course_id: uuid.UUID, prerequisite_course_id: uuid.UUID, session: Session = Depends(get_db_session), actor: AuthenticatedUser = admin_only):
+    record = session.get(CoursePrerequisite, {"course_id": course_id, "prerequisite_course_id": prerequisite_course_id})
+    if record is None:
+        raise HTTPException(status_code=404, detail="Prerequisite not found")
+    session.delete(record); session.flush()
+    log_admin_action(session, actor.id, "REMOVE_COURSE_PREREQUISITE", "course", course_id, {"prerequisite_course_id": str(prerequisite_course_id)})
+    session.commit()
+    return None
 
 @router.post("/academies", status_code=201)
 def create_academy(payload: AcademyWrite, session: Session = Depends(get_db_session), actor: AuthenticatedUser = admin_only):

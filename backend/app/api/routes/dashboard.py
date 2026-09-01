@@ -7,6 +7,7 @@ from app.models.catalog import Academy, Course, LearningPath, LearningPathCourse
 from app.models.enums import ProgressStatus
 from app.models.progress import CourseCompletion, LessonProgress
 from app.providers.auth.base import AuthenticatedUser
+from app.services.access import academy_allowed, course_allowed_in_path
 
 from fastapi import APIRouter, Depends
 
@@ -16,19 +17,14 @@ XP_PER_COMPLETED_COURSE = 100
 XP_PER_LEVEL = 500
 
 
-def allowed(groups, user: AuthenticatedUser) -> bool:
-    user_group_ids = {group_id for group_id, _ in user.groups}
-    return not groups or any(group.id in user_group_ids for group in groups)
-
-
 @router.get("/dashboard")
 def dashboard(session: Session = Depends(get_db_session), user: AuthenticatedUser = Depends(get_current_user)) -> dict:
     academies = session.scalars(select(Academy).options(selectinload(Academy.groups)).where(Academy.is_published.is_(True)).order_by(Academy.name)).all()
-    available_academies = [academy for academy in academies if allowed(academy.groups, user)]
+    available_academies = [academy for academy in academies if academy_allowed(session, academy, user)]
     links = session.scalars(select(LearningPathCourse).options(selectinload(LearningPathCourse.course).selectinload(Course.groups), selectinload(LearningPathCourse.learning_path).selectinload(LearningPath.academy).selectinload(Academy.groups))).all()
     available_courses = {}
     for link in links:
-        if link.course.is_published and link.learning_path.is_published and link.learning_path.academy.is_published and allowed(link.course.groups, user) and allowed(link.learning_path.academy.groups, user):
+        if link.course.is_published and link.learning_path.is_published and link.learning_path.academy.is_published and course_allowed_in_path(session, link.course, link.learning_path, user):
             available_courses[link.course.id] = link.course
     course_ids = list(available_courses)
     completions = session.scalars(select(CourseCompletion).where(CourseCompletion.user_id == user.id, CourseCompletion.course_id.in_(course_ids)).order_by(CourseCompletion.completed_at.desc())).all() if course_ids else []

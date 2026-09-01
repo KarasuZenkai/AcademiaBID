@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 from app.models.enums import LessonType
@@ -30,3 +31,21 @@ class LessonWrite(BaseModel):
     module_id: uuid.UUID; title: str; description: Optional[str] = None; lesson_type: LessonType; position: int = Field(ge=0)
     is_required: bool = True; completion_threshold: Decimal = Field(default=Decimal("0.9"), ge=0, le=1); duration_seconds: Optional[int] = Field(default=None, ge=0)
     sharepoint_site_id: Optional[str] = None; sharepoint_drive_id: Optional[str] = None; sharepoint_item_id: Optional[str] = None; document_url: Optional[str] = None; external_url: Optional[str] = None
+
+
+class AssignmentTarget(str, Enum):
+    ACADEMY = "ACADEMY"
+    LEARNING_PATH = "LEARNING_PATH"
+    COURSE = "COURSE"
+    MODULE = "MODULE"
+
+
+class AssignmentWrite(BaseModel):
+    user_id: uuid.UUID
+    target_type: AssignmentTarget
+    target_id: uuid.UUID
+
+
+class PrerequisiteWrite(BaseModel):
+    course_id: uuid.UUID
+    prerequisite_course_id: uuid.UUID

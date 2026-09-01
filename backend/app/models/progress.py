@@ -13,7 +13,7 @@ from app.models.common import UUIDTimestampMixin, utcnow
 from app.models.enums import ProgressStatus
 
 if TYPE_CHECKING:
-    from app.models.catalog import Course, LearningPath, Lesson
+    from app.models.catalog import Academy, Course, LearningPath, Lesson, Module
     from app.models.identity import User
 
 
@@ -25,6 +25,45 @@ class Enrollment(UUIDTimestampMixin, Base):
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     user: Mapped[User] = relationship(back_populates="enrollments")
     course: Mapped[Course] = relationship(back_populates="enrollments")
+
+
+class AcademyAssignment(UUIDTimestampMixin, Base):
+    __tablename__ = "academy_assignments"
+    __table_args__ = (UniqueConstraint("user_id", "academy_id", name="uq_academy_assignment_user_academy"),)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    academy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("academies.id", ondelete="CASCADE"), nullable=False, index=True)
+    user: Mapped[User] = relationship(back_populates="academy_assignments")
+    academy: Mapped[Academy] = relationship(back_populates="assignments")
+
+
+class LearningPathAssignment(UUIDTimestampMixin, Base):
+    __tablename__ = "learning_path_assignments"
+    __table_args__ = (UniqueConstraint("user_id", "learning_path_id", name="uq_path_assignment_user_path"),)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    learning_path_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True)
+    user: Mapped[User] = relationship(back_populates="learning_path_assignments")
+    learning_path: Mapped[LearningPath] = relationship(back_populates="assignments")
+
+
+class ModuleAssignment(UUIDTimestampMixin, Base):
+    __tablename__ = "module_assignments"
+    __table_args__ = (UniqueConstraint("user_id", "module_id", name="uq_module_assignment_user_module"),)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=False, index=True)
+    user: Mapped[User] = relationship(back_populates="module_assignments")
+    module: Mapped[Module] = relationship(back_populates="assignments")
+
+
+class CoursePrerequisite(Base):
+    __tablename__ = "course_prerequisites"
+    __table_args__ = (
+        UniqueConstraint("course_id", "prerequisite_course_id", name="uq_course_prerequisite"),
+        CheckConstraint("course_id <> prerequisite_course_id", name="ck_course_prerequisite_not_self"),
+    )
+    course_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True)
+    prerequisite_course_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True)
+    course: Mapped[Course] = relationship(foreign_keys=[course_id], back_populates="prerequisites")
+    prerequisite_course: Mapped[Course] = relationship(foreign_keys=[prerequisite_course_id], back_populates="required_for")
 
 
 class LessonProgress(UUIDTimestampMixin, Base):

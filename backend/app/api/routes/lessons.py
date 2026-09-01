@@ -16,13 +16,16 @@ from app.services.graph import GraphService
 from app.schemas.progress import ProgressRead, ProgressWrite
 from app.services.tracking import apply_video_progress, update_course_completion
 from app.services.sequencing import next_lesson, unlocked_lesson_ids
+from app.services.access import course_unlocked, module_allowed
 
 router = APIRouter(prefix="/api/lessons", tags=["lessons"])
 
 def get_authorized_lesson(lesson_id: uuid.UUID, session: Session, user: AuthenticatedUser) -> Lesson:
     lesson = session.get(Lesson, lesson_id, options=[joinedload(Lesson.module).joinedload(Module.course).joinedload(Course.groups), joinedload(Lesson.module).joinedload(Module.course).selectinload(Course.modules).selectinload(Module.lessons)])
-    allowed = lesson and (not lesson.module.course.groups or any(group.id in {group_id for group_id, _ in user.groups} for group in lesson.module.course.groups))
+    allowed = lesson and module_allowed(session, lesson.module, user)
     if not allowed: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
+    if not course_unlocked(session, lesson.module.course, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Complete the required course before accessing this course")
     progress_records = session.scalars(select(LessonProgress).where(LessonProgress.user_id == user.id, LessonProgress.lesson_id.in_([item.id for module in lesson.module.course.modules for item in module.lessons]))).all()
     if lesson.id not in unlocked_lesson_ids(lesson.module.course, progress_records):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Complete the previous required lesson to unlock this lesson")
@@ -68,7 +71,7 @@ def download_document(lesson_id: uuid.UUID, session: Session = Depends(get_db_se
 @router.get("/{lesson_id}/thumbnail", responses={204: {"description": "No thumbnail is available"}})
 def thumbnail(lesson_id: uuid.UUID, session: Session = Depends(get_db_session), user: AuthenticatedUser = Depends(get_current_user)) -> Response:
     lesson = session.get(Lesson, lesson_id, options=[joinedload(Lesson.module).joinedload(Module.course).joinedload(Course.groups)])
-    allowed = lesson and (not lesson.module.course.groups or any(group.id in {group_id for group_id, _ in user.groups} for group in lesson.module.course.groups))
+    allowed = lesson and module_allowed(session, lesson.module, user) and course_unlocked(session, lesson.module.course, user)
     if not allowed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
     if lesson.lesson_type != LessonType.VIDEO or get_settings().auth_provider != "entra" or not user.access_token or not lesson.sharepoint_drive_id or not lesson.sharepoint_item_id:

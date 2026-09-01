@@ -8,7 +8,7 @@ async function read<T>(path: string): Promise<T> {
 
 export type Academy = { id: string; name: string; slug: string; description: string | null; learning_path_count: number; content_count: number; video_count: number };
 export type LearningPath = { name: string; slug: string; description: string | null; position: number; course_count: number; content_count: number };
-export type Course = { title: string; slug: string; description: string | null; estimated_minutes: number | null; position?: number; content_count: number; video_count: number };
+export type Course = { title: string; slug: string; description: string | null; estimated_minutes: number | null; position?: number; content_count: number; video_count: number; unlocked?: boolean };
 
 export const getAcademies = () => read<Academy[]>("/api/academies");
 export const getAcademy = (slug: string) => read<Academy & { learning_paths: LearningPath[] }>(`/api/academies/${slug}`);
