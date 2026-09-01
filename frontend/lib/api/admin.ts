@@ -8,10 +8,10 @@ export async function adminRequest<T>(path: string, method = "GET", payload?: un
 
 export type AdminOverview = {
   users: Array<{ id: string; name: string; email: string; role: string; active: boolean }>;
-  academies: Array<{ id: string; name: string; slug: string; published: boolean }>;
-  paths: Array<{ id: string; name: string; academy_id: string }>;
-  courses: Array<{ id: string; title: string; slug: string; published: boolean }>;
-  modules: Array<{ id: string; title: string; course_id: string }>;
+  academies: Array<{ id: string; name: string; label: string; slug: string; published: boolean }>;
+  paths: Array<{ id: string; name: string; label: string; academy_id: string }>;
+  courses: Array<{ id: string; title: string; label: string; slug: string; published: boolean }>;
+  modules: Array<{ id: string; title: string; label: string; course_id: string }>;
 };
 
 export type LearningAssignment = { user_id: string; user_name: string; target_type: "ACADEMY" | "LEARNING_PATH" | "COURSE" | "MODULE"; target_id: string; target_name: string; target_label: string; assigned_at: string };

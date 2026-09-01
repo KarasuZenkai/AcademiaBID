@@ -1,7 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
 from app.api.dependencies import get_current_user
 from app.core.permissions import require_roles
 from app.db.session import get_db_session
@@ -26,12 +26,16 @@ def save(session, item, actor, action, kind):
 
 @router.get("/overview")
 def overview(session: Session = Depends(get_db_session), _: AuthenticatedUser = admin_only):
+    academies = session.scalars(select(Academy).where(Academy.is_published.is_(True)).order_by(Academy.name)).all()
+    paths = session.execute(select(LearningPath, Academy).join(Academy).where(LearningPath.is_published.is_(True), Academy.is_published.is_(True)).order_by(Academy.name, LearningPath.position)).all()
+    links = session.scalars(select(LearningPathCourse).options(joinedload(LearningPathCourse.course), joinedload(LearningPathCourse.learning_path).joinedload(LearningPath.academy)).join(Course, LearningPathCourse.course_id == Course.id).join(LearningPath).join(Academy).where(LearningPath.is_published.is_(True), Academy.is_published.is_(True), Course.is_published.is_(True)).order_by(Academy.name, LearningPath.position, LearningPathCourse.position)).all()
+    module_rows = session.execute(select(Module, Course, LearningPath, Academy).join(Course).join(LearningPathCourse, LearningPathCourse.course_id == Course.id).join(LearningPath).join(Academy).where(Course.is_published.is_(True), LearningPath.is_published.is_(True), Academy.is_published.is_(True)).order_by(Academy.name, LearningPath.position, Course.title, Module.position)).all()
     return {
         "users": [{"id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value, "active": user.is_active} for user in session.scalars(select(User).order_by(User.name))],
-        "academies": [{"id": str(a.id), "name": a.name, "slug": a.slug, "published": a.is_published} for a in session.scalars(select(Academy).order_by(Academy.name))],
-        "paths": [{"id": str(p.id), "name": p.name, "academy_id": str(p.academy_id)} for p in session.scalars(select(LearningPath).order_by(LearningPath.name))],
-        "courses": [{"id": str(c.id), "title": c.title, "slug": c.slug, "published": c.is_published} for c in session.scalars(select(Course).order_by(Course.title))],
-        "modules": [{"id": str(m.id), "title": m.title, "course_id": str(m.course_id)} for m in session.scalars(select(Module).order_by(Module.title))],
+        "academies": [{"id": str(a.id), "name": a.name, "label": a.name, "slug": a.slug, "published": a.is_published} for a in academies],
+        "paths": [{"id": str(path.id), "name": path.name, "label": f"{academy.name} › {path.name}", "academy_id": str(path.academy_id)} for path, academy in paths],
+        "courses": [{"id": str(link.course.id), "title": link.course.title, "label": f"{link.learning_path.academy.name} › {link.learning_path.name} › {link.course.title}", "slug": link.course.slug, "published": link.course.is_published} for link in links],
+        "modules": [{"id": str(module.id), "title": module.title, "label": f"{academy.name} › {path.name} › {course.title} › {module.title}", "course_id": str(module.course_id)} for module, course, path, academy in module_rows],
     }
 
 
@@ -47,9 +51,20 @@ def assignment_records(session: Session) -> list[dict]:
     records = []
     for target_type, (model, field, target_model, label) in ASSIGNMENT_MODELS.items():
         for assignment, user, target in session.execute(select(model, User, target_model).join(User, model.user_id == User.id).join(target_model, getattr(model, field) == target_model.id)).all():
-            target_name = getattr(target, "name", None) or getattr(target, "title", None)
+            target_name = assignment_target_name(session, target_type, target)
             records.append({"user_id": str(user.id), "user_name": user.name, "target_type": target_type.value, "target_id": str(target.id), "target_name": target_name, "target_label": label, "assigned_at": assignment.created_at.isoformat()})
     return sorted(records, key=lambda item: (item["user_name"].lower(), item["target_type"], item["target_name"].lower()))
+
+
+def assignment_target_name(session: Session, target_type: AssignmentTarget, target) -> str:
+    if target_type == AssignmentTarget.ACADEMY:
+        return target.name
+    if target_type == AssignmentTarget.LEARNING_PATH:
+        return f"{target.academy.name} › {target.name}"
+    course = target if target_type == AssignmentTarget.COURSE else target.course
+    link = session.scalar(select(LearningPathCourse).options(joinedload(LearningPathCourse.learning_path).joinedload(LearningPath.academy)).where(LearningPathCourse.course_id == course.id).order_by(LearningPathCourse.position))
+    prefix = f"{link.learning_path.academy.name} › {link.learning_path.name} › " if link else ""
+    return f"{prefix}{course.title}" if target_type == AssignmentTarget.COURSE else f"{prefix}{course.title} › {target.title}"
 
 
 @router.get("/assignments")
