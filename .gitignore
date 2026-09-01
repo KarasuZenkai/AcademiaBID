@@ -1,0 +1,17 @@
+.DS_Store
+.env
+**/.env.local
+**/.env.production
+**/.env.development.local
+docs/ENTREGA_SEGURA_INFRAESTRUCTURA.txt
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+backend/media/*.mp4

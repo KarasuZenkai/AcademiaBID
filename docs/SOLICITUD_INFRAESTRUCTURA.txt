@@ -1,0 +1,62 @@
+SOLICITUD DE DESPLIEGUE - ACADEMIA BID
+
+Solicito el despliegue de Academia BID desde un repositorio privado de GitHub.
+
+Repositorio:
+[PEGAR URL DEL REPOSITORIO GITHUB]
+
+Rama de despliegue:
+main
+
+Aplicación:
+- Frontend: Next.js
+- Backend: FastAPI / Python
+- Base de datos: PostgreSQL
+- Autenticación: Microsoft Entra ID
+- Contenido: Microsoft Graph / SharePoint
+
+Se solicita al equipo de infraestructura:
+1. Importar o clonar el repositorio GitHub en su plataforma GitLab.
+2. Construir y ejecutar los contenedores de frontend, backend y PostgreSQL, o conectar una base PostgreSQL administrada.
+3. Configurar dominio HTTPS, certificado TLS y proxy inverso.
+4. Habilitar persistencia y respaldos de PostgreSQL.
+5. Configurar las variables protegidas y enmascaradas requeridas.
+6. Asegurar salida HTTPS del backend hacia Microsoft Entra, Microsoft Graph y SharePoint.
+7. Definir un proceso de rollback a la imagen anterior.
+
+VARIABLES BACKEND - CARGAR COMO SECRETOS
+DATABASE_URL
+AUTH_PROVIDER=entra
+CORS_ORIGINS
+AZURE_TENANT_ID
+AZURE_BACKEND_CLIENT_ID
+AZURE_BACKEND_CLIENT_SECRET
+AZURE_BACKEND_SCOPE
+SHAREPOINT_SITE_HOST
+SHAREPOINT_SITE_PATH
+
+VARIABLES FRONTEND - CONFIGURACION DE BUILD
+NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_AUTH_PROVIDER=entra
+NEXT_PUBLIC_AZURE_TENANT_ID
+NEXT_PUBLIC_AZURE_FRONTEND_CLIENT_ID
+NEXT_PUBLIC_AZURE_BACKEND_SCOPE
+
+DATOS QUE NO SE INCLUYEN EN EL REPOSITORIO
+- Secretos de Microsoft Entra
+- Contraseñas de PostgreSQL
+- Tokens, llaves SSH y certificados
+- Archivos .env locales
+- Videos o documentos de SharePoint
+
+PENDIENTE DE DEFINIR CON INFRAESTRUCTURA
+- Dominio productivo
+- Servidor o plataforma de destino
+- Responsable de respaldos y recuperación de PostgreSQL
+- Canal seguro para proporcionar valores de secretos
+- Estrategia de ambientes: pruebas y producción
+
+ACCION EN MICROSOFT ENTRA ANTES DE PRODUCCION
+Agregar el dominio final como Redirect URI de la aplicación frontend.
+
+Los valores reales se entregarán exclusivamente por el canal seguro definido por infraestructura. No deben incluirse en GitHub, correo abierto ni archivos adjuntos sin protección.

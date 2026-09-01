@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --azul-corporativo-oscuro: #004a7c;
+  --azul-corporativo-medio: #005a94;
+  --azul-marino-profundo: #002952;
+  --azul-oscuro: #001429;
+  --azul-cyan: #51b1db;
+  --magenta-corporativo: #a62248;
+  --gris-muy-claro: #f5f5f5;
+  --gris-medio: #808080;
+  --gris-muy-oscuro: #272829;
+  color: var(--gris-muy-oscuro);
+  background: var(--gris-muy-claro);
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-height: 100vh; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: var(--gris-muy-claro); }
+
+.app-card { background: white; border-radius: .75rem; box-shadow: 0 2px 12px rgba(0,0,0,.06); border: 1px solid rgba(0,41,82,.07); }
+.app-card-hover { transition: transform .2s ease, box-shadow .2s ease; }
+.app-card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.app-gradient { background: linear-gradient(135deg, #002952 0%, #004a7c 60%, #005a94 100%); }
+.sidebar-item { border-left: 3px solid transparent; transition: all .2s ease; }
+.sidebar-item:hover { background: rgba(255,255,255,.08); border-left-color: rgba(81,177,219,.5); }
+.sidebar-item-active { background: rgba(255,255,255,.12); border-left-color: #51b1db; }
