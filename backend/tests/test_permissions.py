@@ -1,14 +1,11 @@
-from app.models.identity import Group
 from app.models.enums import Role
 
 from conftest import make_authenticated_user
 
 
-def test_restricted_lesson_is_hidden_from_users_outside_its_group(client, db_session, sample_lesson) -> None:
-    test_client, _ = client
-    group = Group(name="Tecnología")
-    sample_lesson.course.groups.append(group)
-    db_session.commit()
+def test_lesson_is_hidden_without_an_explicit_assignment(client, sample_lesson) -> None:
+    test_client, set_current_user = client
+    set_current_user(make_authenticated_user(Role.LEARNER))
 
     response = test_client.get(f"/api/lessons/{sample_lesson.lesson.id}")
 

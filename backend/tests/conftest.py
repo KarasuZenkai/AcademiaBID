@@ -15,6 +15,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.catalog import Academy, Course, LearningPath, LearningPathCourse, Lesson, Module
 from app.models.identity import User
+from app.models.progress import Enrollment
 from app.models.enums import LessonType, Role
 from app.providers.auth.base import AuthenticatedUser
 
@@ -77,6 +78,7 @@ def sample_lesson(db_session: Session) -> SampleLesson:
     db_session.add_all([database_user, academy, learning_path, course, module, lesson])
     db_session.flush()
     db_session.add(LearningPathCourse(learning_path_id=learning_path.id, course_id=course.id, position=1))
+    db_session.add(Enrollment(user_id=database_user.id, course_id=course.id))
     db_session.commit()
 
     return SampleLesson(

@@ -20,7 +20,6 @@ XP_PER_LEVEL = 500
 @router.get("/dashboard")
 def dashboard(session: Session = Depends(get_db_session), user: AuthenticatedUser = Depends(get_current_user)) -> dict:
     academies = session.scalars(select(Academy).options(selectinload(Academy.groups)).where(Academy.is_published.is_(True)).order_by(Academy.name)).all()
-    available_academies = [academy for academy in academies if academy_allowed(session, academy, user)]
     links = session.scalars(select(LearningPathCourse).options(selectinload(LearningPathCourse.course).selectinload(Course.groups), selectinload(LearningPathCourse.learning_path).selectinload(LearningPath.academy).selectinload(Academy.groups))).all()
     available_courses = {}
     for link in links:
@@ -40,4 +39,5 @@ def dashboard(session: Session = Depends(get_db_session), user: AuthenticatedUse
     overall_progress = sum(float(completion_by_course[course_id].progress_percent) if course_id in completion_by_course else 0 for course_id in course_ids) / total if total else 0
     experience_points = len(completed) * XP_PER_COMPLETED_COURSE
     level = experience_points // XP_PER_LEVEL + 1
-    return {"user_name": user.name, "overall_progress_percent": round(overall_progress, 2), "experience": {"points": experience_points, "level": level, "points_to_next_level": XP_PER_LEVEL - experience_points % XP_PER_LEVEL}, "badges": [{"title": item["title"], "course_slug": item["slug"], "awarded_at": item["completed_at"]} for item in completed[:5]], "continue_learning": continue_items[:5], "recent_courses": [{"title": course.title, "slug": course.slug, "progress_percent": float(completion_by_course[course.id].progress_percent) if course.id in completion_by_course else 0} for course in list(available_courses.values())[:6]], "completed_courses": completed[:6]}
+    recent_courses = [course for course in available_courses.values() if course.id in completion_by_course]
+    return {"user_name": user.name, "overall_progress_percent": round(overall_progress, 2), "experience": {"points": experience_points, "level": level, "points_to_next_level": XP_PER_LEVEL - experience_points % XP_PER_LEVEL}, "badges": [{"title": item["title"], "course_slug": item["slug"], "awarded_at": item["completed_at"]} for item in completed[:5]], "continue_learning": continue_items[:5], "recent_courses": [{"title": course.title, "slug": course.slug, "progress_percent": float(completion_by_course[course.id].progress_percent)} for course in recent_courses[:6]], "completed_courses": completed[:6]}
