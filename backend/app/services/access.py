@@ -40,31 +40,27 @@ def group_allowed(groups: Iterable[object], user: AuthenticatedUser) -> bool:
 def academy_allowed(session: Session, academy: Academy, user: AuthenticatedUser) -> bool:
     if _is_admin(user):
         return True
-    if not group_allowed(academy.groups, user):
-        return False
-    return not _has_assignments(session, AcademyAssignment, "academy_id", academy.id) or _has_user_assignment(
-        session, AcademyAssignment, "academy_id", academy.id, user.id
-    )
+    if _has_assignments(session, AcademyAssignment, "academy_id", academy.id):
+        return _has_user_assignment(session, AcademyAssignment, "academy_id", academy.id, user.id)
+    return group_allowed(academy.groups, user)
 
 
 def path_allowed(session: Session, path: LearningPath, user: AuthenticatedUser) -> bool:
     if _is_admin(user):
         return True
-    if not academy_allowed(session, path.academy, user):
-        return False
-    return not _has_assignments(session, LearningPathAssignment, "learning_path_id", path.id) or _has_user_assignment(
-        session, LearningPathAssignment, "learning_path_id", path.id, user.id
-    )
+    if _has_assignments(session, LearningPathAssignment, "learning_path_id", path.id):
+        return _has_user_assignment(session, LearningPathAssignment, "learning_path_id", path.id, user.id)
+    return academy_allowed(session, path.academy, user)
 
 
 def course_allowed_in_path(session: Session, course: Course, path: LearningPath, user: AuthenticatedUser) -> bool:
     if _is_admin(user):
         return True
-    if not path_allowed(session, path, user) or not group_allowed(course.groups, user):
-        return False
-    return not _has_assignments(session, Enrollment, "course_id", course.id) or _has_user_assignment(
-        session, Enrollment, "course_id", course.id, user.id
-    )
+    if _has_assignments(session, Enrollment, "course_id", course.id):
+        return _has_user_assignment(session, Enrollment, "course_id", course.id, user.id)
+    if session.scalar(select(ModuleAssignment.id).join(Module).where(Module.course_id == course.id, ModuleAssignment.user_id == user.id).limit(1)) is not None:
+        return True
+    return path_allowed(session, path, user) and group_allowed(course.groups, user)
 
 
 def course_allowed(session: Session, course: Course, user: AuthenticatedUser) -> bool:
@@ -77,13 +73,11 @@ def course_allowed(session: Session, course: Course, user: AuthenticatedUser) ->
 
 
 def module_allowed(session: Session, module: Module, user: AuthenticatedUser) -> bool:
-    if not course_allowed(session, module.course, user):
-        return False
     if _is_admin(user):
         return True
-    return not _has_assignments(session, ModuleAssignment, "module_id", module.id) or _has_user_assignment(
-        session, ModuleAssignment, "module_id", module.id, user.id
-    )
+    if _has_assignments(session, ModuleAssignment, "module_id", module.id):
+        return _has_user_assignment(session, ModuleAssignment, "module_id", module.id, user.id)
+    return course_allowed(session, module.course, user)
 
 
 def course_unlocked(session: Session, course: Course, user: AuthenticatedUser) -> bool:
